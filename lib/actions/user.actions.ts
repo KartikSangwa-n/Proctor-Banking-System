@@ -15,19 +15,41 @@ const {
     APPWRITE_BANK_COLLECTION_ID: BANK_COLLECTION_ID,
   } = process.env;
 
-export const signIn = async({email, password}: signInProps) =>{
+  export const getUserInfo = async ({ userId }: getUserInfoProps) => {
     try {
-        const { account } = await createAdminClient();
-
-        const response = await account.createEmailPasswordSession(email, password);
-
-        return parseStringify(response);
-        
+      const { database } = await createAdminClient();
+  
+      const user = await database.listDocuments(
+        DATABASE_ID!,
+        USER_COLLECTION_ID!,
+        [Query.equal('userId', [userId])]
+      )
+  
+      return parseStringify(user.documents[0]);
     } catch (error) {
-        console.error('Error', error);        
+      console.log(error)
     }
+  }
 
-}
+  export const signIn = async ({ email, password }: signInProps) => {
+    try {
+      const { account } = await createAdminClient();
+      const session = await account.createEmailPasswordSession(email, password);
+  
+      cookies().set("appwrite-session", session.secret, {
+        path: "/",
+        httpOnly: true,
+        sameSite: "strict",
+        secure: true,
+      });
+  
+      const user = await getUserInfo({ userId: session.userId }) 
+  
+      return parseStringify(user);
+    } catch (error) {
+      console.error('Error', error);
+    }
+  }
 
 export const signUp = async({password, ...userData}: SignUpParams) =>{
     const { email, firstName, lastName} = userData;
@@ -83,16 +105,21 @@ export const signUp = async({password, ...userData}: SignUpParams) =>{
 
 }
 
-export async function getLoggedInUser() {
-    try {
-      const { account } = await createSessionClient();
-      const user =  await account.get();
 
-      return parseStringify(user);
-    } catch (error) {
-      return null;
-    }
+export async function getLoggedInUser() {
+  try {
+    const { account } = await createSessionClient();
+    const result = await account.get();
+
+    const user = await getUserInfo({ userId: result.$id})
+
+    return parseStringify(user);
+  } catch (error) {
+    console.log(error)
+    return null;
+  }
 }
+
   
 export const logoutAccount = async() => {
     try {
@@ -277,3 +304,4 @@ export const exchangePublicToken = async ({
       console.log(error)
     }
   }
+  
